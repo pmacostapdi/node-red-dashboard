@@ -31,7 +31,8 @@
             offvalueType: {value: 'bool'},
             officon: {value: ''},
             offcolor: {value: ''},
-            animate: {value: false}
+            animate: {value: false},
+            storestate: {value: false}
         },
         inputs:1,
         outputs:1,
@@ -144,6 +145,10 @@
     <div class="form-row">
         <label style="width:auto" for="node-input-passthru"><i class="fa fa-arrow-right"></i> Pass through <code>msg</code> if payload matches new state: </label>
         <input type="checkbox" checked id="node-input-passthru" style="display:inline-block; width:auto; vertical-align:top;">
+    </div>
+    <div class="form-row">
+        <label style="width:auto" for="node-input-storestate"><i class="fa fa-database"></i> Save and restore state from file context: </label>
+        <input type="checkbox" id="node-input-storestate" style="display:inline-block; width:auto; vertical-align:top;">
     </div>
     <div class="form-row form-row-decouple">
         <label for="node-input-decouple"><i class="fa fa-toggle-on"></i> Indicator</label>

@@ -1,3 +1,16 @@
+const fs = require("fs")
+
+function getFileContext (RED) {
+    try {
+        const contextPlugins = require(RED.settings.settingsFile).contextStorage
+        for (const [key, value] of Object.entries(contextPlugins)) {
+            if (value.module && value.module === "localfilesystem") {
+                return key
+            }
+        }
+    } catch (_) {}
+}
+
 module.exports = function(RED) {
     var ui = require('../ui')(RED);
 
@@ -18,6 +31,34 @@ module.exports = function(RED) {
             payload = payload || node.id;
         }
     }
+    function addTopic(config, node, msg) {
+        var t = RED.util.evaluateNodeProperty(config.topic,config.topicType || "str",node,msg) || node.topi;
+        if (t) { msg.topic = t; }
+    }
+    var stateContextStore = getFileContext(RED);
+    if (!stateContextStore) {
+        config.storestate = false
+        node.warn('No local file system context plugin found')
+    }
+    var stateContextVariableName = "dashboard-state";
+    function saveState(config, node, value) {
+        if (!config.storestate) {
+            return;
+        }
+        var state = node.context().global.get(stateContextVariableName, stateContextStore) || {};
+        state[node.id] = value;
+        node.context().global.set(stateContextVariableName, state, stateContextStore);
+    }
+
+    function getState(config, node) {
+        if (!config.storestate) {
+            return false;
+        }
+        var state = node.context().global.get(stateContextVariableName, stateContextStore) || {};
+        node.emit("input",{})
+        return Boolean(state[node.id]);
+    }
+
     function SwitchNode(config) {
         RED.nodes.createNode(this, config);
         this.pt = config.passthru;
@@ -64,6 +105,15 @@ module.exports = function(RED) {
         node.on("input", function(msg) {
             node.topi = msg.topic;
         });
+        if (config.storestate && config.passthru) {
+            var initMsg = function () {
+                msg = { payload: getState(config, node)};
+                addTopic(config, node, msg);
+                node.send(msg)
+                RED.events.removeListener("nodes-started", initMsg)
+            }
+            RED.events.on("nodes-started", initMsg)
+        }
 
         var done = ui.add({
             node: node,
@@ -78,7 +128,7 @@ module.exports = function(RED) {
                 label: config.label,
                 tooltip: config.tooltip,
                 order: config.order,
-                value: false,
+                value: getState(config, node),
                 onicon: config.onicon,
                 officon: config.officon,
                 oncolor: config.oncolor,
@@ -125,8 +175,8 @@ module.exports = function(RED) {
                 return value;
             },
             beforeSend: function (msg) {
-                var t = RED.util.evaluateNodeProperty(config.topic,config.topicType || "str",node,msg) || node.topi;
-                if (t) { msg.topic = t; }
+                addTopic(config, node, msg);
+                saveState(config, node, msg.payload)
             }
         });
 
