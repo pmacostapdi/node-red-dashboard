@@ -36,11 +36,7 @@ module.exports = function(RED) {
         if (t) { msg.topic = t; }
     }
     var stateContextStore = getFileContext(RED);
-    if (!stateContextStore) {
-        config.storestate = false
-        node.warn('No local file system context plugin found')
-    }
-    var stateContextVariableName = "_dashboard-state";
+    var stateContextVariableName = "dashboard-state";
     function saveState(config, node, value) {
         if (!config.storestate) {
             return;
@@ -105,14 +101,25 @@ module.exports = function(RED) {
         node.on("input", function(msg) {
             node.topi = msg.topic;
         });
-        if (config.storestate && config.passthru) {
-            var initMsg = function () {
-                msg = { payload: getState(config, node)};
-                addTopic(config, node, msg);
-                node.send(msg)
-                RED.events.removeListener("nodes-started", initMsg)
+        if (!stateContextStore) {
+            config.storestate = false
+            node.warn('No local file system context plugin found')
+        }
+        if (config.storestate) {
+            var initState = getState(config, node)
+            var col = (initState) ? "green" : "red";
+            var shp = (initState) ? "dot" : "ring";
+            var txt = initState ? "on" : "off";
+            node.status({fill:col, shape:shp, text:txt});
+            if (config.passthru) {
+                var initMsg = function () {
+                    var msg = { payload: initState};
+                    addTopic(config, node, msg);
+                    node.send(msg);
+                    RED.events.removeListener("nodes-started", initMsg);
+                }
+                RED.events.on("nodes-started", initMsg);
             }
-            RED.events.on("nodes-started", initMsg)
         }
 
         var done = ui.add({
