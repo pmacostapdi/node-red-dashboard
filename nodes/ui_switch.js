@@ -2,7 +2,7 @@ const fs = require("fs")
 
 function getFileContext (RED) {
     try {
-        const contextPlugins = require(RED.settings.settingsFile).contextStorage
+        const contextPlugins = require(RED.settings.settingsFile).contextStorage || {}
         for (const [key, value] of Object.entries(contextPlugins)) {
             if (value.module && value.module === "localfilesystem") {
                 return key
@@ -40,7 +40,7 @@ module.exports = function(RED) {
         config.storestate = false
         node.warn('No local file system context plugin found')
     }
-    var stateContextVariableName = "dashboard-state";
+    var stateContextVariableName = "_dashboard-state";
     function saveState(config, node, value) {
         if (!config.storestate) {
             return;
