@@ -35,24 +35,27 @@ module.exports = function(RED) {
         var t = RED.util.evaluateNodeProperty(config.topic,config.topicType || "str",node,msg) || node.topi;
         if (t) { msg.topic = t; }
     }
+    var stateContextVariableName = "state"
     var stateContextStore = getFileContext(RED);
-    var stateContextVariableName = "dashboard-state";
-    function saveState(config, node, value) {
+    function saveState(config, node, state) {
         if (!config.storestate) {
             return;
         }
-        var state = node.context().global.get(stateContextVariableName, stateContextStore) || {};
-        state[node.id] = value;
-        node.context().global.set(stateContextVariableName, state, stateContextStore);
+        var callback = function (error) {
+            if (error) {
+                node.warn("state could not be saved: " + error.message)
+            }
+        }
+        node.context().set(stateContextVariableName, state, stateContextStore, callback);
     }
 
     function getState(config, node) {
         if (!config.storestate) {
             return false;
         }
-        var state = node.context().global.get(stateContextVariableName, stateContextStore) || {};
+        var state = node.context().get(stateContextVariableName, stateContextStore);
         node.emit("input",{})
-        return Boolean(state[node.id]);
+        return Boolean(state);
     }
 
     function SwitchNode(config) {
