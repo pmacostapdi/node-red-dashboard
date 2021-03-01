@@ -1,62 +1,6 @@
-const fs = require("fs")
-
-function getFileContext (RED) {
-    try {
-        const contextPlugins = require(RED.settings.settingsFile).contextStorage || {}
-        for (const [key, value] of Object.entries(contextPlugins)) {
-            if (value.module && value.module === "localfilesystem") {
-                return key
-            }
-        }
-    } catch (_) {}
-}
-
 module.exports = function(RED) {
     var ui = require('../ui')(RED);
-
-    function validateSwitchValue(node,property,type,payload) {
-        if (payloadType === 'flow' || payloadType === 'global') {
-            try {
-                var parts = RED.util.normalisePropertyExpression(payload);
-                if (parts.length === '') {
-                    throw new Error();
-                }
-            } catch(err) {
-                node.warn("Invalid payload property expression - defaulting to node id")
-                payload = node.id;
-                payloadType = 'str';
-            }
-        }
-        else {
-            payload = payload || node.id;
-        }
-    }
-    function addTopic(config, node, msg) {
-        var t = RED.util.evaluateNodeProperty(config.topic,config.topicType || "str",node,msg) || node.topi;
-        if (t) { msg.topic = t; }
-    }
-    var stateContextVariableName = "state"
-    var stateContextStore = getFileContext(RED);
-    function saveState(config, node, state) {
-        if (!config.storestate) {
-            return;
-        }
-        var callback = function (error) {
-            if (error) {
-                node.warn("state could not be saved: " + error.message)
-            }
-        }
-        node.context().set(stateContextVariableName, state, stateContextStore, callback);
-    }
-
-    function getState(config, node) {
-        if (!config.storestate) {
-            return false;
-        }
-        var state = node.context().get(stateContextVariableName, stateContextStore);
-        node.emit("input",{})
-        return Boolean(state);
-    }
+    const state = require("./state")(RED);
 
     function SwitchNode(config) {
         RED.nodes.createNode(this, config);
@@ -104,25 +48,16 @@ module.exports = function(RED) {
         node.on("input", function(msg) {
             node.topi = msg.topic;
         });
-        if (!stateContextStore) {
-            config.storestate = false
-            node.warn('No local file system context plugin found')
-        }
+        state.checkContextStore(config, node);
         if (config.storestate) {
-            var initState = getState(config, node)
-            var col = (initState) ? "green" : "red";
-            var shp = (initState) ? "dot" : "ring";
-            var txt = initState ? "on" : "off";
+            var initState = state.getState(config, node);
+            var props = {
+                true: { col: "green", shp: "dot", txt: "on"},
+                false: {col: "red", shp: "ring", txt: "off"},
+            };
+            var { col, shp, txt } = props[initState];
             node.status({fill:col, shape:shp, text:txt});
-            if (config.passthru) {
-                var initMsg = function () {
-                    var msg = { payload: initState};
-                    addTopic(config, node, msg);
-                    node.send(msg);
-                    RED.events.removeListener("nodes-started", initMsg);
-                }
-                RED.events.on("nodes-started", initMsg);
-            }
+            state.passInitState(config, node, initState);
         }
 
         var done = ui.add({
@@ -138,7 +73,7 @@ module.exports = function(RED) {
                 label: config.label,
                 tooltip: config.tooltip,
                 order: config.order,
-                value: getState(config, node),
+                value: state.getState(config, node),
                 onicon: config.onicon,
                 officon: config.officon,
                 oncolor: config.oncolor,
@@ -185,8 +120,8 @@ module.exports = function(RED) {
                 return value;
             },
             beforeSend: function (msg) {
-                addTopic(config, node, msg);
-                saveState(config, node, msg.payload)
+                state.addTopic(config, node, msg);
+                state.saveState(config, node, msg.payload);
             }
         });
 
